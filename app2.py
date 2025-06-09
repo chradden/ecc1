@@ -4,6 +4,29 @@ import fitz  # PyMuPDF
 import io
 import os
 
+# --- Passwortschutz ---
+def check_password():
+    """Password input and verification"""
+    def password_entered():
+        if st.session_state["password"] == st.secrets["app_password"]:
+            st.session_state["password_correct"] = True
+            del st.session_state["password"]  # Passwort aus Speicher löschen
+        else:
+            st.session_state["password_correct"] = False
+
+    if "password_correct" not in st.session_state:
+        st.text_input("🔒 Passwort eingeben", type="password", on_change=password_entered, key="password")
+        st.stop()
+    elif not st.session_state["password_correct"]:
+        st.text_input("🔒 Passwort eingeben", type="password", on_change=password_entered, key="password")
+        st.error("❌ Falsches Passwort!")
+        st.stop()
+    else:
+        pass
+
+# --- Check Passwort ---
+check_password()
+
 # --- OpenAI Setup ---
 try:
     # Lokale Entwicklung: .env Datei laden
