@@ -114,51 +114,58 @@ def extract_positions_with_llm(text):
 
     return positions_df
 
-# --- Awork Importvorlage füllen ---
-# --- Awork Importvorlage füllen ---
 def fill_awork_template(positions_df):
     try:
         template = pd.read_excel(AWORK_TEMPLATE_PATH)
-
         st.write("📚 Vorlagen-Spalten:", template.columns.tolist())
 
-        # Spalten ermitteln
-        titel_spalte = None
-        beschreibung_spalte = None
-        stunden_spalte = None
-        for col in template.columns:
-            c = col.strip().lower()
-            if c in ["aufgabenname", "titel", "task name"]:
-                titel_spalte = col
-            if c in ["beschreibung", "description"]:
-                beschreibung_spalte = col
-            if c in ["geplanter aufwand", "geplante stunden", "planned effort"]:
-                stunden_spalte = col
+        # Spalten-Mapper
+        titel_spalte = beschreibung_spalte = stunden_spalte = None
+        status_spalte = taetigkeit_spalte = None
 
-        if not titel_spalte or not beschreibung_spalte or not stunden_spalte:
-            st.error("❌ Fehler: Die Awork-Vorlage hat keine passenden Spalten!")
+        for col in template.columns:
+            lc = col.strip().lower()
+            if lc in ["aufgabenname", "titel", "task name"]:
+                titel_spalte = col
+            elif lc in ["beschreibung", "description"]:
+                beschreibung_spalte = col
+            elif lc in ["geplanter aufwand", "geplante stunden", "planned effort"]:
+                stunden_spalte = col
+            elif lc == "status":
+                status_spalte = col
+            elif lc in ["tätigkeit", "taetigkeit", "activity"]:
+                taetigkeit_spalte = col
+
+        if not (titel_spalte and beschreibung_spalte and stunden_spalte):
+            st.error("❌ Fehler: Die Awork-Vorlage hat keine passenden Spalten für Aufgabenname, Beschreibung und Geplanter Aufwand!")
             st.stop()
 
-        # --- Hier kommt die Änderung: Menge als String
-        menge_str = positions_df['Menge'].fillna("").astype(str)
-
-        # Extrahiere die Zahl aus "8 Tage", "10" oder auch schon reinen Zahlen
+        # Menge als Zahl extrahieren
+        menge_str = positions_df["Menge"].fillna("").astype(str)
         menge_zahl = (
             menge_str
-            .str.extract(r"(\d+)", expand=False)    # String → erste Zahl
-            .fillna("0")                            # fehlende → "0"
-            .astype(float)                          # float
+            .str.extract(r"(\d+)", expand=False)
+            .fillna("0").astype(float)
         )
 
+        # Titel mit Positionsnummer
+        titel_mit_pos = positions_df["Pos"].astype(str).apply(lambda x: f"Pos. {x} ") + positions_df["Titel"]
+
+        # Neues DataFrame zusammenbauen
         new_data = {
-            titel_spalte:           positions_df['Titel'],
-            beschreibung_spalte:    positions_df['Beschreibung'],
+            titel_spalte:           titel_mit_pos,
+            beschreibung_spalte:    positions_df["Beschreibung"],
             stunden_spalte:         menge_zahl
         }
+        if status_spalte:
+            new_data[status_spalte] = ["To do"] * len(positions_df)
+        if taetigkeit_spalte:
+            new_data[taetigkeit_spalte] = ["Projektarbeit"] * len(positions_df)
 
         new_df = pd.DataFrame(new_data)
         updated_template = pd.concat([template, new_df], ignore_index=True)
 
+        # Als Excel in den Memory-Buffer schreiben
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             updated_template.to_excel(writer, index=False)
@@ -168,6 +175,7 @@ def fill_awork_template(positions_df):
     except Exception as e:
         st.error(f"❌ Fehler beim Ausfüllen der Vorlage: {e}")
         return None
+
 
 
 # --- Hauptlogik ---
