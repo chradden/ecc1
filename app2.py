@@ -115,36 +115,48 @@ def extract_positions_with_llm(text):
     return positions_df
 
 # --- Awork Importvorlage füllen ---
+# --- Awork Importvorlage füllen ---
 def fill_awork_template(positions_df):
     try:
         template = pd.read_excel(AWORK_TEMPLATE_PATH)
 
         st.write("📚 Vorlagen-Spalten:", template.columns.tolist())
 
+        # Spalten ermitteln
         titel_spalte = None
         beschreibung_spalte = None
         stunden_spalte = None
-
         for col in template.columns:
-            if col.strip().lower() in ["aufgabenname", "titel", "task name"]:
+            c = col.strip().lower()
+            if c in ["aufgabenname", "titel", "task name"]:
                 titel_spalte = col
-            if col.strip().lower() in ["beschreibung", "description"]:
+            if c in ["beschreibung", "description"]:
                 beschreibung_spalte = col
-            if col.strip().lower() in ["geplanter aufwand", "geplante stunden", "planned effort"]:
+            if c in ["geplanter aufwand", "geplante stunden", "planned effort"]:
                 stunden_spalte = col
 
         if not titel_spalte or not beschreibung_spalte or not stunden_spalte:
             st.error("❌ Fehler: Die Awork-Vorlage hat keine passenden Spalten!")
             st.stop()
 
+        # --- Hier kommt die Änderung: Menge als String
+        menge_str = positions_df['Menge'].fillna("").astype(str)
+
+        # Extrahiere die Zahl aus "8 Tage", "10" oder auch schon reinen Zahlen
+        menge_zahl = (
+            menge_str
+            .str.extract(r"(\d+)", expand=False)    # String → erste Zahl
+            .fillna("0")                            # fehlende → "0"
+            .astype(float)                          # float
+        )
+
         new_data = {
-            titel_spalte: positions_df['Titel'],
-            beschreibung_spalte: positions_df['Beschreibung'],
-            stunden_spalte: positions_df['Menge'].str.extract(r"(\d+)").astype(float).squeeze()
+            titel_spalte:           positions_df['Titel'],
+            beschreibung_spalte:    positions_df['Beschreibung'],
+            stunden_spalte:         menge_zahl
         }
 
         new_df = pd.DataFrame(new_data)
-
         updated_template = pd.concat([template, new_df], ignore_index=True)
 
         output = io.BytesIO()
@@ -154,8 +166,9 @@ def fill_awork_template(positions_df):
         return output
 
     except Exception as e:
-        st.error(f"❌ Fehler beim Ausfüllen der Vorlage: {str(e)}")
+        st.error(f"❌ Fehler beim Ausfüllen der Vorlage: {e}")
         return None
+
 
 # --- Hauptlogik ---
 if uploaded_pdf:
